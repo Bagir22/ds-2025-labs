@@ -1,0 +1,18 @@
+services:
+  nats-local:
+    image: nats:2.10-alpine
+    container_name: nats-local
+    hostname: nats-local
+    environment:
+      - POSTGRES_USER=warehouse-service
+      - POSTGRES_PASSWORD=Nakuo8qu
+      - POSTGRES_DB=warehouse
+    volumes:
+      - nats_local_data:/data
+    ports:
+      - '4222:4222'
+      - '6222:6222'
+      - '8222:8222'
+
+volumes:
+  nats_local_data:
