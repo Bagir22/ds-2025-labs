@@ -24,30 +24,29 @@ public class IndexModel : PageModel
     public IActionResult OnPost(string text)
     {
         _logger.LogDebug(text);
-        
+
         string id = Guid.NewGuid().ToString();
-
-        string textKey = $"TEXT-{id}";
-        string rankKey = $"RANK-{id}";
-        string similarityKey = $"SIMILARITY-{id}";
         
-        double rank = CalculateRank(text);
-        int similarity = CalculateSimilarity(text);
-
-        _redis.Set(textKey, text);
-        _redis.Set(rankKey, rank.ToString());
-        //_logger.LogInformation($"Similarity: {similarity}");
-        _redis.Set(similarityKey, similarity.ToString());
-
+        if (!string.IsNullOrEmpty(text))
+        {
+            string textKey = $"TEXT-{id}";
+            string rankKey = $"RANK-{id}";
+            string similarityKey = $"SIMILARITY-{id}";
+        
+            double rank = CalculateRank(text);
+            int similarity = CalculateSimilarity(text);
+            
+            _redis.Set(textKey, text);
+            _redis.Set(rankKey, rank.ToString());
+            //_logger.LogInformation($"Similarity: {similarity}");
+            _redis.Set(similarityKey, similarity.ToString());
+        }
+        
         return Redirect($"summary?id={id}");
     }
 
     private double CalculateRank(string text)
     {
-        if (string.IsNullOrEmpty(text))
-        {
-            return 0;
-        }
         int total = text.Length;
 
         int nonLetters = text.Count(ch => !char.IsLetter(ch));
