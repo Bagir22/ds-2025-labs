@@ -4,46 +4,50 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Producer
+namespace Producer;
+
+class Program
 {
-    class Program
+    public static void Main(string[] args)
     {
-        static void Main(string[] args)
+        Console.WriteLine("Producer started");
+
+        CancellationTokenSource cts = new CancellationTokenSource();
+
+        Task.Factory.StartNew(() => ProduceAsync(cts.Token), cts.Token);
+
+        Console.WriteLine("Press Enter to exit");
+        Console.ReadLine();
+
+        cts.Cancel();
+
+        Console.WriteLine("done");
+    }
+
+    private static async Task ProduceAsync(CancellationToken ct)
+    {
+        // Установка соединения с NATS по адресу localhost:4222
+        ConnectionFactory connectionFactory = new ConnectionFactory();
+        using IConnection connection = connectionFactory.CreateConnection();
+
+        // Отправка сообщения ежесекундно в цикле.
+        ulong count = 0;
+        while (!ct.IsCancellationRequested)
         {
-            Console.WriteLine("Producer started");
+            string message = $"#{count}";
+            byte[] messageData = Encoding.UTF8.GetBytes(message);
 
-            CancellationTokenSource cts = new CancellationTokenSource();
+            Console.WriteLine($"Sending message: {message}");
+            connection.Publish(
+                "valuator.processing.rank",
+                messageData
+            );
 
-            Task.Factory.StartNew(() => ProduceAsync(cts.Token), cts.Token);
-
-            Console.WriteLine("Press Enter to exit");
-            Console.ReadLine();
-
-            cts.Cancel();
-
-            Console.WriteLine("done");
+            await Task.Delay(TimeSpan.FromSeconds(1), ct);
+            ++count;
         }
 
-        static async Task ProduceAsync(CancellationToken ct)
-        {
-            ConnectionFactory cf = new ConnectionFactory();
-
-            using (IConnection c = cf.CreateConnection())
-            {
-                ulong count = 0;
-                while (!ct.IsCancellationRequested)
-                {
-                    string m = $"#{count}";
-                    Console.WriteLine("Produced: {0}", m);
-                    byte[] data = Encoding.UTF8.GetBytes(m);
-                    c.Publish("valuator.processing.rank", data);
-                    await Task.Delay(1000);
-                    ++count;
-                }
-                c.Drain();
-
-                c.Close();
-            }
-        }
+        await connection.DrainAsync();
+        connection.Close();
     }
 }
