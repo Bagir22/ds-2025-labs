@@ -1,7 +1,10 @@
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using RabbitMQ.Client;
 using StackExchange.Redis;
 using Valuator.Repository;
+using Valuator.Publisher;
 
 namespace Valuator.Pages;
 
@@ -9,11 +12,13 @@ public class IndexModel : PageModel
 {
     private readonly ILogger<IndexModel> _logger;
     private readonly IRedisRepository _redis;
+    private readonly IRabbitMqPublisher _publisher;
 
-    public IndexModel(ILogger<IndexModel> logger, IRedisRepository redis)
+    public IndexModel(ILogger<IndexModel> logger, IRedisRepository redis, IRabbitMqPublisher publisher)
     {
         _logger = logger;
-        _redis = redis;   
+        _redis = redis;
+        _publisher = publisher;
     }
 
     public void OnGet()
@@ -24,43 +29,30 @@ public class IndexModel : PageModel
     public IActionResult OnPost(string text)
     {
         _logger.LogDebug(text);
-
         string id = Guid.NewGuid().ToString();
-        
+
         if (!string.IsNullOrEmpty(text))
         {
             string textKey = $"TEXT-{id}";
-            string rankKey = $"RANK-{id}";
-            string similarityKey = $"SIMILARITY-{id}";
-        
-            double rank = CalculateRank(text);
-            int similarity = CalculateSimilarity(text);
-            
             _redis.Set(textKey, text);
-            _redis.Set(rankKey, rank.ToString());
-            //_logger.LogInformation($"Similarity: {similarity}");
+
+            string similarityKey = $"SIMILARITY-{id}";
+            int similarity = CalculateSimilarity(text, id);
             _redis.Set(similarityKey, similarity.ToString());
+
+            _publisher.Publish("valuator.processing.rank", id);
         }
-        
+
         return Redirect($"summary?id={id}");
     }
-
-    private double CalculateRank(string text)
-    {
-        int total = text.Length;
-
-        int nonLetters = text.Count(ch => !char.IsLetter(ch));
-        return (double)nonLetters / total;
-    }
-
-    private int CalculateSimilarity(string text)
+    
+    private int CalculateSimilarity(string text, string id)
     {
         var keys = _redis.GetKeys("TEXT-*");
-        //_logger.LogInformation(string.Join(", ", keys.Select(k => k.ToString())));
 
         foreach (var key in keys)
         {
-            if (_redis.Get(key) == text)
+            if (_redis.Get(key) == text && key.Replace("TEXT-", "") != id)
             {
                 return 1;
             }

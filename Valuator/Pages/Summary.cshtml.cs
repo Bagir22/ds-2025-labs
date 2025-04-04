@@ -18,14 +18,32 @@ public class SummaryModel : PageModel
         _redis = redis; 
     }
 
-    public double Rank { get; set; }
-    public double Similarity { get; set; }
+    public double? Rank { get; set; }
+    public double? Similarity { get; set; }
 
     public void OnGet(string id)
     {
         _logger.LogDebug(id);
-        
-        Rank = Convert.ToDouble(_redis.Get($"RANK-{id}") ?? "0");
-        Similarity = Convert.ToDouble(_redis.Get($"SIMILARITY-{id}") ?? "0");
+
+        string rankValue = _redis.Get($"RANK-{id}");
+        string similarityValue = _redis.Get($"SIMILARITY-{id}");
+
+        if (!double.TryParse(rankValue, out double rank))
+        {
+            Rank = null;
+        }
+        else
+        {
+            Rank = rank;
+        }
+
+        if (!double.TryParse(similarityValue, out double similarity))
+        {
+            Similarity = null;
+        }
+        else
+        {
+            Similarity = similarity;
+        }
     }
 }

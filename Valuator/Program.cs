@@ -1,7 +1,11 @@
+using Microsoft.AspNetCore.DataProtection;
 using StackExchange.Redis;
 using Valuator.Repository;
+using Valuator.Publisher;
 using Valuator.Repository;
-
+using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
+using StackExchange.Redis;
+    
 namespace Valuator;
 
 public class Program
@@ -10,12 +14,18 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         
-        string redisConnection = builder.Configuration.GetConnectionString("Redis") ?? "127.0.0.1:6379";
+        string redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
         
-        builder.Services.AddSingleton<IConnectionMultiplexer>(options =>
-            ConnectionMultiplexer.Connect(redisConnection));
+        var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
         
+        builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
         builder.Services.AddScoped<IRedisRepository, RedisRepository>();
+        
+        builder.Services.AddSingleton<IRabbitMqPublisher, RabbitMqPublisher>(); 
+        
+        builder.Services.AddDataProtection()
+            .PersistKeysToStackExchangeRedis(redisConnection, "DataProtection-Keys")
+            .SetApplicationName("Valuator");
         
         // Add services to the container.
         builder.Services.AddRazorPages();
