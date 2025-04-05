@@ -1,0 +1,7 @@
+﻿@page
+@model Valuator.Pages.SummaryModel
+@{
+}
+<p>Оценка содержания: @(Model.Rank.HasValue ? Model.Rank : "Оценка содержания не завершена")</p>
+<p>Плагиат: @(Model.Similarity.HasValue ? Model.Similarity : "Оценка содержания не завершена")</p>
+
