@@ -28,13 +28,14 @@ namespace EventsLogger
                     {
                         Console.WriteLine("Connected to RabbitMQ");
                         
-                        channel.ExchangeDeclare("valuator.events.rank", ExchangeType.Fanout, durable: true);
+                        channel.ExchangeDeclare("valuator.events", ExchangeType.Direct, durable: true);
+                        
                         var rankQueue = channel.QueueDeclare("eventslogger.rank", durable: false, exclusive: false, autoDelete: false);
-                        channel.QueueBind(rankQueue, "valuator.events.rank", "");
+                        channel.QueueBind(rankQueue, "valuator.events", "rank");
 
-                        channel.ExchangeDeclare("valuator.events.similarity", ExchangeType.Fanout, durable: true);
                         var similarityQueue = channel.QueueDeclare("eventslogger.similarity", durable: false, exclusive: false, autoDelete: false);
-                        channel.QueueBind(similarityQueue, "valuator.events.similarity", "");
+                        channel.QueueBind(similarityQueue, "valuator.events", "similarity");
+
 
                         var rankConsumer = new EventingBasicConsumer(channel);
                         rankConsumer.Received += (model, ea) =>

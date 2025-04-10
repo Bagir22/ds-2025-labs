@@ -41,8 +41,8 @@ public class IndexModel : PageModel
             _redis.Set(similarityKey, similarity.ToString());
 
             _publisher.Publish(
-                exchange: "valuator.events.similarity", 
-                routingKey: "",
+                exchange: "valuator.events", 
+                routingKey: "similarity",
                 message: $"{id}:{similarity}");
         
             _publisher.Publish(
