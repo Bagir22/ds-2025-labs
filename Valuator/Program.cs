@@ -5,7 +5,8 @@ using Valuator.Publisher;
 using Valuator.Repository;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using StackExchange.Redis;
-    
+using Valuator.Hub;
+
 namespace Valuator;
 
 public class Program
@@ -30,8 +31,19 @@ public class Program
         // Add services to the container.
         builder.Services.AddRazorPages();
 
+        builder.Services.AddSignalR();
+        
+        builder.Services.AddCors(options => {
+            options.AddPolicy("AllowAll", policy => {
+                policy.AllowAnyOrigin()
+                    .AllowAnyMethod()
+                    .AllowAnyHeader();
+            });
+        });
+     
         var app = builder.Build();
-
+        
+        app.UseCors("AllowAll");
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {
@@ -44,6 +56,8 @@ public class Program
         app.UseAuthorization();
 
         app.MapRazorPages();
+        
+        app.MapHub<ResultHub>("/hub");
 
         app.Run();
     }

@@ -5,6 +5,8 @@ using RabbitMQ.Client.Events;
 using StackExchange.Redis;
 using System.Threading;
 using System.Linq;
+using Microsoft.AspNetCore.SignalR.Client;
+
 
 namespace RankCalculator
 {
@@ -70,12 +72,17 @@ namespace RankCalculator
 
                 if (!string.IsNullOrEmpty(text))
                 {
+                    var random = new Random();
+                    int delay = random.Next(3000, 15000); 
+                    Thread.Sleep(delay);
+                    
                     double rank = RankCalculator.Calculate(text);
                     string rankKey = $"RANK-{id}";
                     _redis.StringSet(rankKey, rank.ToString());
                     
                     PublishRankCalculated(id, rank);
-
+                    NotifyClient(id);
+                    
                     Console.WriteLine($"Processed ID: {id}, Rank: {rank}");
                 }
 
@@ -109,6 +116,23 @@ namespace RankCalculator
             }
         }
 
+        private async void NotifyClient(string id)
+        {
+            try
+            {
+                var connection = new HubConnectionBuilder()
+                    .WithUrl("http://nginx:8000/hub")
+                    .Build();
+
+                await connection.StartAsync();
+                await connection.InvokeAsync("SendAsync", "ReceiveResult", id);
+                Console.WriteLine($"SignarR notified {id}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"SignalR notify failed: {ex.Message}");
+            }
+        }
     }
 
     class Program

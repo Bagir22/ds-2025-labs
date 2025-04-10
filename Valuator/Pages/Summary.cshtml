@@ -5,3 +5,21 @@
 <p>Оценка содержания: @(Model.Rank.HasValue ? Model.Rank : "Оценка содержания не завершена")</p>
 <p>Плагиат: @(Model.Similarity.HasValue ? Model.Similarity : "Оценка содержания не завершена")</p>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/7.0.5/signalr.min.js"></script>
+<script>
+    const id = new URLSearchParams(window.location.search).get("id");
+
+    const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/hub")
+        .build();
+
+    connection.on("ReceiveResult", function (messageId) {
+        if (messageId === id) {
+            location.reload();
+        }
+    });
+
+    connection.start().catch(function (err) {
+        return console.error(err.toString());
+    });
+</script>
