@@ -9,14 +9,13 @@ namespace EventsLogger
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Starting EventsLogger...");
+            Console.WriteLine("Starting EventsLogger");
 
             var factory = new ConnectionFactory()
             {
                 HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "rabbitmq",
                 UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
                 Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? "guest",
-                AutomaticRecoveryEnabled = true
             };
 
             while (true)
@@ -28,13 +27,13 @@ namespace EventsLogger
                     {
                         Console.WriteLine("Connected to RabbitMQ");
                         
-                        channel.ExchangeDeclare("valuator.events.rank", ExchangeType.Fanout, durable: true);
+                        channel.ExchangeDeclare("valuator.events", ExchangeType.Direct, durable: true);
+                        
                         var rankQueue = channel.QueueDeclare("eventslogger.rank", durable: false, exclusive: false, autoDelete: false);
-                        channel.QueueBind(rankQueue, "valuator.events.rank", "");
+                        channel.QueueBind(rankQueue, "valuator.events", "rank");
 
-                        channel.ExchangeDeclare("valuator.events.similarity", ExchangeType.Fanout, durable: true);
                         var similarityQueue = channel.QueueDeclare("eventslogger.similarity", durable: false, exclusive: false, autoDelete: false);
-                        channel.QueueBind(similarityQueue, "valuator.events.similarity", "");
+                        channel.QueueBind(similarityQueue, "valuator.events", "similarity");
 
                         var rankConsumer = new EventingBasicConsumer(channel);
                         rankConsumer.Received += (model, ea) =>
@@ -64,7 +63,7 @@ namespace EventsLogger
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error: {ex.Message}");
-                    Console.WriteLine("Reconnecting in 5 seconds...");
+                    Console.WriteLine("Reconnecting in 5 seconds");
                     Thread.Sleep(5000);
                 }
             }

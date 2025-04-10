@@ -97,8 +97,8 @@ namespace RankCalculator
                 var body = Encoding.UTF8.GetBytes(message);
         
                 publishChannel.BasicPublish(
-                    exchange: "valuator.events.rank",
-                    routingKey: "",
+                    exchange: "valuator.events",
+                    routingKey: "rank",
                     body: body);
         
                 Console.WriteLine($"Published RankCalculated event for ID: {id}");
