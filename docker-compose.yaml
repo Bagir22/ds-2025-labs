@@ -12,7 +12,7 @@ services:
       - REDIS_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
-      - RABBITMQ_PASSWORD=adminPassword
+      - RABBITMQ_PASS=adminPassword
       - RABBITMQ_PORT=5672
     depends_on:
       - redis
@@ -31,7 +31,7 @@ services:
       - REDIS_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
-      - RABBITMQ_PASSWORD=adminPassword
+      - RABBITMQ_PASS=adminPassword
       - RABBITMQ_PORT=5672
     depends_on:
       - redis
@@ -46,6 +46,9 @@ services:
       - "5001:5001"
     environment:
       - ASPNETCORE_URLS=http://+:5001
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=adminPassword
     depends_on:
       - redis
       - rabbitmq
@@ -59,6 +62,9 @@ services:
       - "5002:5002"
     environment:
       - ASPNETCORE_URLS=http://+:5002
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=adminPassword
     depends_on:
       - redis
       - rabbitmq
@@ -72,6 +78,9 @@ services:
       - "5003:5003"
     environment:
       - ASPNETCORE_URLS=http://+:5003
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=adminPassword
     depends_on:
       - redis
       - rabbitmq
@@ -85,8 +94,35 @@ services:
       - "5004:5004"
     environment:
       - ASPNETCORE_URLS=http://+:5004
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=adminPassword
     depends_on:
       - redis
+      - rabbitmq
+    networks:
+      - app-network
+  
+  eventslogger1:
+    build:
+      context: ./EventsLogger
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=adminPassword
+    depends_on:
+      - rabbitmq
+    networks:
+      - app-network
+
+  eventslogger2:
+    build:
+      context: ./EventsLogger
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASS=adminPassword
+    depends_on:
       - rabbitmq
     networks:
       - app-network
@@ -117,12 +153,13 @@ services:
       - app-network
 
   rabbitmq:
-    image: rabbitmq:4.0.7-management
+    image: rabbitmq:management
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
       - ./rabbitmq-data:/var/lib/rabbitmq
+      - ./rabbitmq-config/:/etc/rabbitmq/
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: adminPassword

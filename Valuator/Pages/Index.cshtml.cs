@@ -40,7 +40,15 @@ public class IndexModel : PageModel
             int similarity = CalculateSimilarity(text, id);
             _redis.Set(similarityKey, similarity.ToString());
 
-            _publisher.Publish("valuator.processing.rank", id);
+            _publisher.Publish(
+                exchange: "valuator.events.similarity", 
+                routingKey: "",
+                message: $"{id}:{similarity}");
+        
+            _publisher.Publish(
+                exchange: "valuator.processing.rank",
+                routingKey: "",
+                message: id);
         }
 
         return Redirect($"summary?id={id}");

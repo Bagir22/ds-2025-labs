@@ -2,5 +2,5 @@ namespace Valuator.Publisher;
 
 public interface IRabbitMqPublisher
 {
-    void Publish(string queue, string message);
+    void Publish(string exchange, string routingKey, string message);
 }

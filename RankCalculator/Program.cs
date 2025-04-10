@@ -1,16 +1,16 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using StackExchange.Redis;
 using System.Threading;
+using System.Linq;
 
-namespace RankCalculator;
-
-class Program
+namespace RankCalculator
 {
-    static void Main(string[] args)
+    public static class RedisConnector
     {
-        try
+        public static IDatabase ConnectToRedis()
         {
             var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost";
             var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";
@@ -23,88 +23,172 @@ class Program
             }
 
             var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
-            var redis = redisConnection.GetDatabase();
             Console.WriteLine("Connected to Redis");
+            return redisConnection.GetDatabase();
+        }
+    }
 
-            Console.WriteLine("Connecting to RabbitMQ");
-
-            var rabbitHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost";
+    public static class RabbitMqConnector
+    {
+        public static ConnectionFactory GetConnectionFactory()
+        {
+            var rabbitHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "rabbitmq";
             var rabbitUser = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest";
-            var rabbitPassword = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest";
+            var rabbitPassword = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? "guest";
 
-            var connectionFactory = new ConnectionFactory()
+            return new ConnectionFactory()
             {
                 HostName = rabbitHost,
                 UserName = rabbitUser,
                 Password = rabbitPassword,
             };
-            
+        }
+    }
+    
+    public class MessageProcessor
+    {
+        private readonly IDatabase _redis;
+        private readonly IModel _channel;
+        private readonly IConnection _connection;
+
+        public MessageProcessor(IDatabase redis, IModel channel, IConnection connection)
+        {
+            _redis = redis;
+            _channel = channel;
+            _connection = connection;
+        }
+
+        public void ProcessMessage(BasicDeliverEventArgs ea)
+        {
+            try
+            {
+                var body = ea.Body.ToArray();
+                var id = Encoding.UTF8.GetString(body);
+
+                string textKey = $"TEXT-{id}";
+                string text = _redis.StringGet(textKey);
+
+                if (!string.IsNullOrEmpty(text))
+                {
+                    double rank = RankCalculator.Calculate(text);
+                    string rankKey = $"RANK-{id}";
+                    _redis.StringSet(rankKey, rank.ToString());
+                    
+                    PublishRankCalculated(id, rank);
+
+                    Console.WriteLine($"Processed ID: {id}, Rank: {rank}");
+                }
+
+                _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error while processing message: {ex.Message}");
+            }
+        }
+
+        private void PublishRankCalculated(string id, double rank)
+        {
+            try
+            {
+                using var publishChannel = _connection.CreateModel();
+
+                var message = $"{id}:{rank}";
+                var body = Encoding.UTF8.GetBytes(message);
+        
+                publishChannel.BasicPublish(
+                    exchange: "valuator.events.rank",
+                    routingKey: "",
+                    body: body);
+        
+                Console.WriteLine($"Published RankCalculated event for ID: {id}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error publishing RankCalculated event: {ex.Message}");
+            }
+        }
+
+    }
+
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            try
+            {
+                var redis = RedisConnector.ConnectToRedis();
+                var connectionFactory = RabbitMqConnector.GetConnectionFactory();
+
+                StartMessageProcessing(connectionFactory, redis);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in application setup: {ex.Message}");
+            }
+        }
+
+        private static void StartMessageProcessing(ConnectionFactory connectionFactory, IDatabase redis)
+        {
             while (true)
             {
                 try
                 {
-                    IConnection connection = connectionFactory.CreateConnection();
-                    IModel channel = connection.CreateModel();
-
-                    channel.QueueDeclare(queue: "valuator.processing.rank",
-                        durable: true,
-                        exclusive: false,
-                        autoDelete: false,
-                        arguments: null);
-
-                    var consumer = new EventingBasicConsumer(channel);
-                    consumer.Received += (model, ea) =>
+                    using (var connection = connectionFactory.CreateConnection())
+                    using (var channel = connection.CreateModel())
                     {
-                        try
+                        SetupQueue(channel);
+                        var processor = new MessageProcessor(redis, channel, connection);
+
+                        var consumer = new EventingBasicConsumer(channel);
+                        consumer.Received += (model, ea) => processor.ProcessMessage(ea);
+
+                        channel.BasicConsume(queue: "valuator.processing.rank", autoAck: false, consumer: consumer);
+
+                        Console.WriteLine("Waiting for messages");
+                        while (connection.IsOpen)
                         {
-                            var body = ea.Body.ToArray();
-                            var id = Encoding.UTF8.GetString(body); 
-
-                            string textKey = $"TEXT-{id}";
-                            string text = redis.StringGet(textKey);
-
-                            if (!string.IsNullOrEmpty(text))
-                            {
-                                double rank = CalculateRank(text);
-                                string rankKey = $"RANK-{id}";
-                                Thread.Sleep(500);
-                                redis.StringSet(rankKey, rank.ToString());
-
-                                Console.WriteLine($"Processed ID: {id}, Rank: {rank}");
-                            }
-
-                            channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                            Thread.Sleep(1000);
                         }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"Error while processing message: {ex.Message}");
-                        }
-                    };
-
-                    channel.BasicConsume(queue: "valuator.processing.rank", autoAck: false, consumer: consumer);
-                        
-                    Console.WriteLine("Waiting for messages");
-                    while (true)
-                    {
-                        Thread.Sleep(1000);
                     }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error connecting to RabbitMQ: {ex.Message}");
                     Console.WriteLine("Retrying in 5 seconds");
-                    Thread.Sleep(5000); 
+                    Thread.Sleep(5000);
                 }
             }
         }
-        catch (Exception ex) {
-            Console.WriteLine($"Error in rabbitmq setup: {ex.Message}");
+
+        private static void SetupQueue(IModel channel)
+        {
+            channel.ExchangeDeclare(
+                exchange: "valuator.processing.rank",
+                type: ExchangeType.Fanout,
+                durable: true);
+
+            channel.QueueDeclare(
+                queue: "valuator.processing.rank",
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null);
+            
+            channel.QueueBind(
+                queue: "valuator.processing.rank",
+                exchange: "valuator.processing.rank",
+                routingKey: ""); 
         }
-    }    
-    static double CalculateRank(string text)
+    }
+    
+    public static class RankCalculator
     {
-        int total = text.Length;
-        int nonLetters = text.Count(ch => !char.IsLetter(ch));
-        return Math.Round((double)nonLetters / total, 2);
+        public static double Calculate(string text)
+        {
+            int total = text.Length;
+            int nonLetters = text.Count(ch => !char.IsLetter(ch));
+            return Math.Round((double)nonLetters / total, 2);
+        }
     }
 }

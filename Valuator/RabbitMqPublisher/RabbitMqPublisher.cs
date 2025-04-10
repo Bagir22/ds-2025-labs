@@ -3,43 +3,42 @@ using RabbitMQ.Client;
 
 namespace Valuator.Publisher;
 
-public class RabbitMqPublisher : IRabbitMqPublisher
+public class RabbitMqPublisher : IRabbitMqPublisher, IDisposable
 {
     private readonly IConnection _connection;
     private readonly IModel _channel;
 
     public RabbitMqPublisher()
     {
-        var connectionFactory = new ConnectionFactory()
+        var factory = new ConnectionFactory()
         {
-            HostName = "rabbitmq",
-            UserName = "admin",
-            Password = "adminPassword"
+            HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "rabbitmq",
+            UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
+            Password = Environment.GetEnvironmentVariable("RABBITMQ_PASS") ?? "guest"
         };
 
-        _connection = connectionFactory.CreateConnection();
+        _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
-
-        _channel.QueueDeclare(queue: "valuator.processing.rank",
-            durable: true,
-            exclusive: false,
-            autoDelete: false, // TODO за что отвечает
-            arguments: null);
     }
 
-    public void Publish(string queue, string message)
+    public void Publish(string exchange, string routingKey, string message)
     {
         try
         {
-            var properties = _channel.CreateBasicProperties();
-            properties.Persistent = true;
-
-            byte[] data = Encoding.UTF8.GetBytes(message);
-            _channel.BasicPublish(exchange: "", routingKey: queue, basicProperties: properties, body: data);
+            var body = Encoding.UTF8.GetBytes(message);
+            _channel.BasicPublish(exchange: exchange, routingKey: routingKey, body: body);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"RabbitMQ publish error: {ex.Message}");
         }
+    }
+    
+    public void Dispose()
+    {
+        _channel?.Close();
+        _channel?.Dispose();
+        _connection?.Close();
+        _connection?.Dispose();
     }
 }
