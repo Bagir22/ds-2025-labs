@@ -1,0 +1,3 @@
+VHOST: /
+QUEUE: eventslogger.similarity
+INDEX: v2

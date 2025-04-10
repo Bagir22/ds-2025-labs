@@ -28,22 +28,31 @@ public class Program
             .PersistKeysToStackExchangeRedis(redisConnection, "DataProtection-Keys")
             .SetApplicationName("Valuator");
         
+        builder.Services.AddCors();
+        builder.Services.AddCors(options => {
+            options.AddPolicy("AllowAll", builder => {
+                builder.WithOrigins(
+                        "http://localhost:8000",
+                        "http://nginx:8000"   
+                    )
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
+            });
+        });
+        
         // Add services to the container.
         builder.Services.AddRazorPages();
 
-        builder.Services.AddSignalR();
-        
-        builder.Services.AddCors(options => {
-            options.AddPolicy("AllowAll", policy => {
-                policy.AllowAnyOrigin()
-                    .AllowAnyMethod()
-                    .AllowAnyHeader();
+        builder.Services.AddSignalR()
+            .AddStackExchangeRedis(redisConnectionString, options => {
+                options.Configuration.ChannelPrefix = "signalr";
             });
-        });
-     
+        
         var app = builder.Build();
         
         app.UseCors("AllowAll");
+        
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())
         {
