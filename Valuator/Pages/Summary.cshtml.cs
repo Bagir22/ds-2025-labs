@@ -23,6 +23,6 @@ public class SummaryModel : PageModel
     {
         _logger.LogDebug(id);
 
-        //TODO: проинициализировать свойства Rank и Similarity значениями из БД
+        // TODO: (pa1) проинициализировать свойства Rank и Similarity значениями из БД (Redis)
     }
 }

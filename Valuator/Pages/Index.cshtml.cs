@@ -24,13 +24,13 @@ public class IndexModel : PageModel
         string id = Guid.NewGuid().ToString();
 
         string textKey = "TEXT-" + id;
-        //TODO: сохранить в БД text по ключу textKey
+        // TODO: (pa1) сохранить в БД (Redis) text по ключу textKey
 
         string rankKey = "RANK-" + id;
-        //TODO: посчитать rank и сохранить в БД по ключу rankKey
+        // TODO: (pa1) посчитать rank и сохранить в БД (Redis) по ключу rankKey
 
         string similarityKey = "SIMILARITY-" + id;
-        //TODO: посчитать similarity и сохранить в БД по ключу similarityKey
+        // TODO: (pa1) посчитать similarity и сохранить в БД (Redis) по ключу similarityKey
 
         return Redirect($"summary?id={id}");
     }
