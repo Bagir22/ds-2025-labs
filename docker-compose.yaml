@@ -7,15 +7,21 @@ services:
     ports:
       - "6000:80"
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=somePassword
+      - DB_HOST=redis
+      - DB_MAIN=redis_main:6379
+      - DB_RU=redis_ru:6380
+      - DB_EU=redis_eu:6381
+      - DB_ASIA=redis_asia:6382
+      - DB_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
       - RABBITMQ_PASS=adminPassword
       - RABBITMQ_PORT=5672
     depends_on:
-      - redis
+      - redis_main
+      - redis_ru
+      - redis_eu
+      - redis_asia
       - rabbitmq
     networks:
       - app-network
@@ -26,15 +32,21 @@ services:
     ports:
       - "6001:80"
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=somePassword
+      - DB_HOST=redis
+      - DB_MAIN=redis_main:6379
+      - DB_RU=redis_ru:6380
+      - DB_EU=redis_eu:6381
+      - DB_ASIA=redis_asia:6382
+      - DB_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
       - RABBITMQ_PASS=adminPassword
       - RABBITMQ_PORT=5672
     depends_on:
-      - redis
+      - redis_main
+      - redis_ru
+      - redis_eu
+      - redis_asia
       - rabbitmq
     networks:
       - app-network
@@ -46,11 +58,20 @@ services:
       - "5001:5001"
     environment:
       - ASPNETCORE_URLS=http://+:5001
+      - DB_HOST=redis
+      - DB_MAIN=redis_main:6379
+      - DB_RU=redis_ru:6380
+      - DB_EU=redis_eu:6381
+      - DB_ASIA=redis_asia:6382
+      - DB_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
       - RABBITMQ_PASS=adminPassword
     depends_on:
-      - redis
+      - redis_main
+      - redis_ru
+      - redis_eu
+      - redis_asia
       - rabbitmq
     networks:
       - app-network
@@ -62,11 +83,20 @@ services:
       - "5002:5002"
     environment:
       - ASPNETCORE_URLS=http://+:5002
+      - DB_HOST=redis
+      - DB_MAIN=redis_main:6379
+      - DB_RU=redis_ru:6380
+      - DB_EU=redis_eu:6381
+      - DB_ASIA=redis_asia:6382
+      - DB_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
       - RABBITMQ_PASS=adminPassword
     depends_on:
-      - redis
+      - redis_main
+      - redis_ru
+      - redis_eu
+      - redis_asia
       - rabbitmq
     networks:
       - app-network
@@ -78,11 +108,20 @@ services:
       - "5003:5003"
     environment:
       - ASPNETCORE_URLS=http://+:5003
+      - DB_HOST=redis
+      - DB_MAIN=redis_main:6379
+      - DB_RU=redis_ru:6380
+      - DB_EU=redis_eu:6381
+      - DB_ASIA=redis_asia:6382
+      - DB_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
       - RABBITMQ_PASS=adminPassword
     depends_on:
-      - redis
+      - redis_main
+      - redis_ru
+      - redis_eu
+      - redis_asia
       - rabbitmq
     networks:
       - app-network
@@ -94,11 +133,20 @@ services:
       - "5004:5004"
     environment:
       - ASPNETCORE_URLS=http://+:5004
+      - DB_HOST=redis
+      - DB_MAIN=redis_main:6379
+      - DB_RU=redis_ru:6380
+      - DB_EU=redis_eu:6381
+      - DB_ASIA=redis_asia:6382
+      - DB_PASSWORD=somePassword
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=admin
       - RABBITMQ_PASS=adminPassword
     depends_on:
-      - redis
+      - redis_main
+      - redis_ru
+      - redis_eu
+      - redis_asia
       - rabbitmq
     networks:
       - app-network
@@ -127,17 +175,38 @@ services:
     networks:
       - app-network
 
-  redis:
+  redis_ru:
+    image: "redis:alpine"
+    command: redis-server --port 6380 --requirepass somePassword
+    ports:
+      - "6380:6380"
+    networks:
+      - app-network
+
+  redis_eu:
+    image: "redis:alpine"
+    command: redis-server --port 6381 --requirepass somePassword
+    ports:
+      - "6381:6381"
+    networks:
+      - app-network
+
+  redis_asia:
+    image: "redis:alpine"
+    command: redis-server --port 6382 --requirepass somePassword
+    ports:
+      - "6382:6382"
+    networks:
+      - app-network
+  
+  redis_main:
     image: "redis:alpine"
     command: redis-server --requirepass somePassword
     ports:
       - "6379:6379"
-    volumes:
-      - ./redis-data:/var/lib/redis
-      - ./redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - app-network
-
+  
   nginx:
     image: nginx:latest
     volumes:

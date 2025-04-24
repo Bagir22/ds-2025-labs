@@ -6,29 +6,41 @@ namespace Valuator.Repository
 {
     public class RedisRepository : IRedisRepository
     {
-        private readonly IDatabase _redis;
-        private readonly IServer _server;
-        
-        public RedisRepository(IConnectionMultiplexer redisMultiplexer)
+        private readonly RedisRouter _router;
+
+        public RedisRepository(RedisRouter router)
         {
-            var endPoint = redisMultiplexer.GetEndPoints().First();
-            _server = redisMultiplexer.GetServer(endPoint);
-            _redis = redisMultiplexer.GetDatabase();
+            _router = router;
         }
 
-        public string? Get(string key)
+        public string? Get(string shardKey, string key)
         {
-            return _redis.StringGet(key);
+            IDatabase db;
+            if (shardKey == "main")
+            {
+                db = _router.GetMainDb();
+            }
+            else
+            {
+                db = _router.GetShard(shardKey);
+            }
+            
+            return db.StringGet(key);
         }
 
-        public bool Set(string key, string value)
+        public bool Set(string shardKey, string key, string value)
         {
-            return _redis.StringSet(key, value);
-        }
-
-        public IEnumerable<string> GetKeys(string pattern = "*")
-        {
-            return _server.Keys(pattern: pattern).Select(k => k.ToString());
+            IDatabase db;
+            if (shardKey == "main")
+            {
+                db = _router.GetMainDb();
+            }
+            else
+            {
+                db = _router.GetShard(shardKey);
+            }
+            
+            return db.StringSet(key, value);
         }
     }
 }

@@ -1,35 +1,15 @@
 ﻿using System;
+using System.Linq;
 using System.Text;
+using System.Threading;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using StackExchange.Redis;
-using System.Threading;
-using System.Linq;
 using Microsoft.AspNetCore.SignalR.Client;
-
+using RankCalculator.Repository;
 
 namespace RankCalculator
 {
-    public static class RedisConnector
-    {
-        public static IDatabase ConnectToRedis()
-        {
-            var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost";
-            var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";
-            var redisPassword = Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? "";
-
-            var redisConnectionString = $"{redisHost}:{redisPort}";
-            if (!string.IsNullOrEmpty(redisPassword))
-            {
-                redisConnectionString += $",password={redisPassword}";
-            }
-
-            var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
-            Console.WriteLine("Connected to Redis");
-            return redisConnection.GetDatabase();
-        }
-    }
-
     public static class RabbitMqConnector
     {
         public static ConnectionFactory GetConnectionFactory()
@@ -46,16 +26,16 @@ namespace RankCalculator
             };
         }
     }
-    
+
     public class MessageProcessor
     {
-        private readonly IDatabase _redis;
+        private readonly RedisRouter _router;
         private readonly IModel _channel;
         private readonly IConnection _connection;
 
-        public MessageProcessor(IDatabase redis, IModel channel, IConnection connection)
+        public MessageProcessor(RedisRouter router, IModel channel, IConnection connection)
         {
-            _redis = redis;
+            _router = router;
             _channel = channel;
             _connection = connection;
         }
@@ -67,26 +47,39 @@ namespace RankCalculator
                 var body = ea.Body.ToArray();
                 var id = Encoding.UTF8.GetString(body);
 
-                string textKey = $"TEXT-{id}";
-                string text = _redis.StringGet(textKey);
-
-                if (!string.IsNullOrEmpty(text))
+                var redisRepo = new RedisRepository(_router);
+                
+                var countryCode = redisRepo.Get("main", $"TEXT-{id}");
+                if (string.IsNullOrEmpty(countryCode))
                 {
-                    var random = new Random();
-                    int delay = random.Next(3000, 15000); 
-                    Thread.Sleep(delay);
-                    
-                    double rank = RankCalculator.Calculate(text);
-                    string rankKey = $"RANK-{id}";
-                    _redis.StringSet(rankKey, rank.ToString());
-                    
-                    PublishRankCalculated(id, rank);
-                    NotifyClient(id);
-                    
-                    Console.WriteLine($"Processed ID: {id}, Rank: {rank}");
+                    Console.WriteLine($"Region not found for ID: {id}");
+                    _channel.BasicAck(ea.DeliveryTag, false);
+                    return;
                 }
+                
+                string text = redisRepo.Get(countryCode, $"TEXT-{id}");
+                if (string.IsNullOrEmpty(text))
+                {
+                    Console.WriteLine($"Text hash not found for ID: {id} in {countryCode} region");
+                    _channel.BasicAck(ea.DeliveryTag, false);
+                    return;
+                }
+                
+                var random = new Random();
+                Thread.Sleep(random.Next(3000, 15000));
 
-                _channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                double rank = RankCalculator.Calculate(text);
+                string rankKey = $"RANK-{id}";
+
+                var db = _router.GetShard(countryCode);
+                db.StringSet(rankKey, rank.ToString());
+
+                PublishRankCalculated(id, rank);
+                NotifyClient(id);
+
+                Console.WriteLine($"Processed ID: {id}, Rank: {rank}");
+
+                _channel.BasicAck(ea.DeliveryTag, false);
             }
             catch (Exception ex)
             {
@@ -99,15 +92,14 @@ namespace RankCalculator
             try
             {
                 using var publishChannel = _connection.CreateModel();
-
                 var message = $"{id}:{rank}";
                 var body = Encoding.UTF8.GetBytes(message);
-        
+
                 publishChannel.BasicPublish(
                     exchange: "valuator.events",
                     routingKey: "rank",
                     body: body);
-                
+
                 Console.WriteLine($"Published RankCalculated event for ID: {id}");
             }
             catch (Exception ex)
@@ -126,12 +118,22 @@ namespace RankCalculator
 
                 await connection.StartAsync();
                 await connection.InvokeAsync("SendAsync", "ReceiveResult", id);
-                Console.WriteLine($"SignarR notified {id}");
+                Console.WriteLine($"SignalR notified: {id}");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"SignalR notify failed: {ex.Message}");
             }
+        }
+    }
+
+    public static class RankCalculator
+    {
+        public static double Calculate(string text)
+        {
+            int total = text.Length;
+            int nonLetters = text.Count(ch => !char.IsLetter(ch));
+            return Math.Round((double)nonLetters / total, 2);
         }
     }
 
@@ -141,10 +143,16 @@ namespace RankCalculator
         {
             try
             {
-                var redis = RedisConnector.ConnectToRedis();
-                var connectionFactory = RabbitMqConnector.GetConnectionFactory();
+                var mainHost = Environment.GetEnvironmentVariable("DB_MAIN") ?? "redis_main:6379";
+                var password = Environment.GetEnvironmentVariable("DB_PASSWORD");
 
-                StartMessageProcessing(connectionFactory, redis);
+                var mainConfig = $"{mainHost},password={password},abortConnect=false";
+                var mainConnection = ConnectionMultiplexer.Connect(mainConfig);
+
+                var router = new RedisRouter(mainConnection);
+
+                var connectionFactory = RabbitMqConnector.GetConnectionFactory();
+                StartMessageProcessing(connectionFactory, router);
             }
             catch (Exception ex)
             {
@@ -152,34 +160,33 @@ namespace RankCalculator
             }
         }
 
-        private static void StartMessageProcessing(ConnectionFactory connectionFactory, IDatabase redis)
+        private static void StartMessageProcessing(ConnectionFactory connectionFactory, RedisRouter router)
         {
             while (true)
             {
                 try
                 {
-                    using (var connection = connectionFactory.CreateConnection())
-                    using (var channel = connection.CreateModel())
+                    using var connection = connectionFactory.CreateConnection();
+                    using var channel = connection.CreateModel();
+
+                    SetupQueue(channel);
+                    var processor = new MessageProcessor(router, channel, connection);
+
+                    var consumer = new EventingBasicConsumer(channel);
+                    consumer.Received += (model, ea) => processor.ProcessMessage(ea);
+
+                    channel.BasicConsume(queue: "valuator.processing.rank", autoAck: false, consumer: consumer);
+
+                    Console.WriteLine("Waiting for messages...");
+                    while (connection.IsOpen)
                     {
-                        SetupQueue(channel);
-                        var processor = new MessageProcessor(redis, channel, connection);
-
-                        var consumer = new EventingBasicConsumer(channel);
-                        consumer.Received += (model, ea) => processor.ProcessMessage(ea);
-
-                        channel.BasicConsume(queue: "valuator.processing.rank", autoAck: false, consumer: consumer);
-
-                        Console.WriteLine("Waiting for messages");
-                        while (connection.IsOpen)
-                        {
-                            Thread.Sleep(1000);
-                        }
+                        Thread.Sleep(1000);
                     }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error connecting to RabbitMQ: {ex.Message}");
-                    Console.WriteLine("Retrying in 5 seconds");
+                    Console.WriteLine("Retrying in 5 seconds...");
                     Thread.Sleep(5000);
                 }
             }
@@ -198,21 +205,11 @@ namespace RankCalculator
                 exclusive: false,
                 autoDelete: false,
                 arguments: null);
-            
+
             channel.QueueBind(
                 queue: "valuator.processing.rank",
                 exchange: "valuator.processing.rank",
-                routingKey: ""); 
-        }
-    }
-    
-    public static class RankCalculator
-    {
-        public static double Calculate(string text)
-        {
-            int total = text.Length;
-            int nonLetters = text.Count(ch => !char.IsLetter(ch));
-            return Math.Round((double)nonLetters / total, 2);
+                routingKey: "");
         }
     }
 }

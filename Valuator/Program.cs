@@ -15,17 +15,18 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
         
-        string redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379";
+        string redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "redis:6379,abortConnect=false";
         
-        var redisConnection = ConnectionMultiplexer.Connect(redisConnectionString);
-        
-        builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+        builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+            ConnectionMultiplexer.Connect(redisConnectionString));
+
+        builder.Services.AddSingleton<RedisRouter>();
         builder.Services.AddScoped<IRedisRepository, RedisRepository>();
-        
-        builder.Services.AddSingleton<IRabbitMqPublisher, RabbitMqPublisher>(); 
+
+        builder.Services.AddSingleton<IRabbitMqPublisher, RabbitMqPublisher>();
         
         builder.Services.AddDataProtection()
-            .PersistKeysToStackExchangeRedis(redisConnection, "DataProtection-Keys")
+            .PersistKeysToStackExchangeRedis(ConnectionMultiplexer.Connect(redisConnectionString), "DataProtection-Keys")
             .SetApplicationName("Valuator");
         
         builder.Services.AddCors();
