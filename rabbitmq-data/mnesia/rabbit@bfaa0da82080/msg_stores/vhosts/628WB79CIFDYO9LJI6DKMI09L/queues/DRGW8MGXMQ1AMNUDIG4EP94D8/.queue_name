@@ -1,0 +1,3 @@
+VHOST: /
+QUEUE: eventslogger.lookup
+INDEX: v2

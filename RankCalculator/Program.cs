@@ -7,6 +7,7 @@ using RabbitMQ.Client.Events;
 using StackExchange.Redis;
 using Microsoft.AspNetCore.SignalR.Client;
 using RankCalculator.Repository;
+using Valuator.Publisher;
 
 namespace RankCalculator
 {
@@ -44,12 +45,18 @@ namespace RankCalculator
         {
             try
             {
+                using var publishChannel = _connection.CreateModel();
+                
                 var body = ea.Body.ToArray();
                 var id = Encoding.UTF8.GetString(body);
 
                 var redisRepo = new RedisRepository(_router);
                 
                 var countryCode = redisRepo.Get("main", $"TEXT-{id}");
+                publishChannel.BasicPublish(
+                    exchange: "valuator.events",
+                    routingKey: "lookup",
+                    body: Encoding.UTF8.GetBytes($"[LOOKUP]: TEXT-{id}, main"));
                 if (string.IsNullOrEmpty(countryCode))
                 {
                     Console.WriteLine($"Region not found for ID: {id}");
@@ -58,6 +65,10 @@ namespace RankCalculator
                 }
                 
                 string text = redisRepo.Get(countryCode, $"TEXT-{id}");
+                publishChannel.BasicPublish(
+                    exchange: "valuator.events",
+                    routingKey: "lookup",
+                    body: Encoding.UTF8.GetBytes($"[LOOKUP]: TEXT-{id}, {countryCode}"));
                 if (string.IsNullOrEmpty(text))
                 {
                     Console.WriteLine($"Text hash not found for ID: {id} in {countryCode} region");

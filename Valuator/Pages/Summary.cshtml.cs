@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
+using Valuator.Publisher;
 using Valuator.Repository;
 
 namespace Valuator.Pages;
@@ -14,10 +15,12 @@ public class SummaryModel : PageModel
 {
     private readonly ILogger<SummaryModel> _logger;
     private readonly IRedisRepository _redis;
-    public SummaryModel(ILogger<SummaryModel> logger,  IRedisRepository redis)
+    private readonly IRabbitMqPublisher _publisher;
+    public SummaryModel(ILogger<SummaryModel> logger,  IRedisRepository redis, IRabbitMqPublisher publisher)
     {
         _logger = logger;
         _redis = redis; 
+        _publisher = publisher;
     }
 
     public double? Rank { get; set; }
@@ -51,6 +54,10 @@ public class SummaryModel : PageModel
     private string GetSimiliarity(string id)
     {
         string? countryCode = _redis.Get("main", $"TEXT-{id}");
+        _publisher.Publish(
+            exchange: "valuator.events",
+            routingKey: "lookup",
+            message: $"[LOOKUP]: TEXT-{id}, main");
         if (string.IsNullOrEmpty(countryCode))
         {
             _logger.LogWarning($"Region not found for ID: {id}");
@@ -58,6 +65,10 @@ public class SummaryModel : PageModel
         }
 
         string? text = _redis.Get(countryCode, $"TEXT-{id}");
+        _publisher.Publish(
+            exchange: "valuator.events",
+            routingKey: "lookup",
+            message: $"[LOOKUP]: TEXT-{id}, {countryCode}");
         if (string.IsNullOrEmpty(text))
         {
             _logger.LogWarning($"Text not found for ID: {id} in {countryCode} region");
@@ -69,6 +80,10 @@ public class SummaryModel : PageModel
         foreach (var shard in new[] { "RU", "EU", "ASIA"})
         {
             var existingKey = _redis.Get(shard, $"SIMILARITY-{textHash}");
+            _publisher.Publish(
+                exchange: "valuator.events",
+                routingKey: "lookup",
+                message: $"[LOOKUP]: SIMILARITY-{textHash}, {shard}");
             if (!string.IsNullOrEmpty(existingKey) && existingKey == "1")
             {
                 _logger.LogInformation($"Found SIMILARITY-{textHash} in {shard} shard");
@@ -83,6 +98,10 @@ public class SummaryModel : PageModel
     private string GetRank(string id)
     {
         string? countryCode = _redis.Get("main", $"TEXT-{id}");
+        _publisher.Publish(
+            exchange: "valuator.events",
+            routingKey: "lookup",
+            message: $"[LOOKUP]: TEXT-{id}, main");
         if (string.IsNullOrEmpty(countryCode))
         {
             _logger.LogWarning($"Region not found for ID: {id}");
@@ -90,6 +109,10 @@ public class SummaryModel : PageModel
         }
 
         string? rank = _redis.Get(countryCode, $"RANK-{id}");
+        _publisher.Publish(
+            exchange: "valuator.events",
+            routingKey: "lookup",
+            message: $"[LOOKUP]: RANK-{id}, {countryCode}");
         if (string.IsNullOrEmpty(rank))
         {
             _logger.LogWarning($"Text not found for ID: {id} in {countryCode} region");

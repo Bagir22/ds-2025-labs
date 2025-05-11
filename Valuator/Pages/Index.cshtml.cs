@@ -79,10 +79,18 @@ public class IndexModel : PageModel
         foreach (var shard in new[] { "RU", "EU", "ASIA"})
         {
             var existingKey = _redis.Get(shard, $"SIMILARITY-{textHash}");
+            _publisher.Publish(
+                exchange: "valuator.events",
+                routingKey: "lookup",
+                message: $"[LOOKUP]: SIMILARITY-{textHash}, {shard}");
             if (!string.IsNullOrEmpty(existingKey))
             {
                 _logger.LogInformation($"Found SIMILARITY-{textHash} in {shard} shard");
                 id = _redis.Get(shard, $"TEXT_HASH-{textHash}");
+                _publisher.Publish(
+                    exchange: "valuator.events",
+                    routingKey: "lookup",
+                    message: $"[LOOKUP]: TEXT_HASH-{textHash}, {shard}");
                 countryCode = shard;
                 _redis.Set(shard, $"SIMILARITY-{textHash}", "1");
                 return "1";

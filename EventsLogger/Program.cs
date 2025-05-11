@@ -35,8 +35,10 @@ namespace EventsLogger
 
                         var similarityQueue = channel.QueueDeclare("eventslogger.similarity", durable: false, exclusive: false, autoDelete: false);
                         channel.QueueBind(similarityQueue, "valuator.events", "similarity");
-
-
+                        
+                        var lookupQueue = channel.QueueDeclare("eventslogger.lookup", durable: false, exclusive: false, autoDelete: false);
+                        channel.QueueBind(lookupQueue, "valuator.events", "lookup");
+                        
                         var rankConsumer = new EventingBasicConsumer(channel);
                         rankConsumer.Received += (model, ea) =>
                         {
@@ -53,8 +55,17 @@ namespace EventsLogger
                             Console.WriteLine($"[Similarity] {DateTime.Now}: {message}");
                         };
 
+                        var lookupConsumer = new EventingBasicConsumer(channel);
+                        lookupConsumer.Received += (model, ea) =>
+                        {
+                            var body = ea.Body.ToArray();
+                            var message = Encoding.UTF8.GetString(body);
+                            Console.WriteLine($"[Lookup] {DateTime.Now}: {message}");
+                        };
+                        
                         channel.BasicConsume(rankQueue, true, rankConsumer);
                         channel.BasicConsume(similarityQueue, true, similarityConsumer);
+                        channel.BasicConsume(lookupQueue, true, lookupConsumer);
                         
                         while (connection.IsOpen)
                         {
