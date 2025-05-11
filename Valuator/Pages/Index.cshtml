@@ -4,12 +4,27 @@
     ViewData["Title"] = "Главная";
 }
 
-<div class="text-center">
-    <form method="post">
-        <div class="col-2">Текст для оценки:</div>
-        <div class="col-10">
-            <textarea name="text" rows="5" cols="50"></textarea>
-            <input type="submit" />
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Оценка текста</h2>
+
+    <form method="post" class="mx-auto" style="max-width: 600px;">
+        <div class="form-group mb-3">
+            <label for="text">Текст для оценки:</label>
+            <textarea id="text" name="text" class="form-control" rows="5" required></textarea>
+        </div>
+
+        <div class="form-group mb-3">
+            <label for="country">Страна гражданства:</label>
+            <select id="country" name="country" class="form-select" required>
+                @foreach (var country in Model.Countries)
+                {
+                    <option value="@country.Region">@country.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="text-center">
+            <button type="submit" class="btn btn-primary">Отправить</button>
         </div>
     </form>
 </div>
