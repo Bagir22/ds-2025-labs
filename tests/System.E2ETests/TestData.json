@@ -1,0 +1,8 @@
+[
+  {
+    "text": "ab ab",
+    "country": "UAE",
+    "expectedRank": 0.2,
+    "expectedSimilarity": 0
+  }
+]

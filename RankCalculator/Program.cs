@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -142,8 +143,24 @@ namespace RankCalculator
     {
         public static double Calculate(string text)
         {
-            int total = text.Length;
-            int nonLetters = text.Count(ch => !char.IsLetter(ch));
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0.00;
+            }
+
+            var si = new StringInfo(text);
+            int total = si.LengthInTextElements;
+
+            int nonLetters = 0;
+            for (int i = 0; i < total; i++)
+            {
+                string elem = si.SubstringByTextElements(i, 1);
+                if (!char.IsLetter(elem, 0)) 
+                {
+                    nonLetters++;
+                }
+            }
+
             return Math.Round((double)nonLetters / total, 2);
         }
     }

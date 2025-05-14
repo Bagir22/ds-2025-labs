@@ -13,10 +13,19 @@ public class RedisRouter
 
         _shards = new Dictionary<string, IConnectionMultiplexer>
         {
-            { "RU", ConnectionMultiplexer.Connect($"{configuration["DB_RU"]},password={configuration["DB_PASSWORD"]}") },
-            { "EU", ConnectionMultiplexer.Connect($"{configuration["DB_EU"]},password={configuration["DB_PASSWORD"]}") },
-            { "ASIA", ConnectionMultiplexer.Connect($"{configuration["DB_ASIA"]},password={configuration["DB_PASSWORD"]}") }
+            { "RU", ConnectionMultiplexer.Connect(GetConnectionString("DB_RU", "redis_ru:6380")) },
+            { "EU", ConnectionMultiplexer.Connect(GetConnectionString("DB_EU", "redis_eu:6381")) },
+            { "ASIA", ConnectionMultiplexer.Connect(GetConnectionString("DB_ASIA", "redis_asia:6382")) }
         };
+    }
+    
+    private string GetConnectionString(string environmentVariable, string defaultValue)
+    {
+        // Читаем значение из переменной окружения, если она существует
+        var dbHost = Environment.GetEnvironmentVariable(environmentVariable) ?? defaultValue;
+        var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "somePassword"; 
+
+        return $"{dbHost},password={dbPassword}";
     }
     
     public IDatabase GetShard(string countryCode)
@@ -27,11 +36,12 @@ public class RedisRouter
         {
             string connectionString = countryCode switch
             {
-                "RU" => $"{Environment.GetEnvironmentVariable("DB_RU")}",
-                "EU" => $"{Environment.GetEnvironmentVariable("DB_EU")}",
-                "ASIA" => $"{Environment.GetEnvironmentVariable("DB_ASIA")}",
-                _ => $"{Environment.GetEnvironmentVariable("DB_MAIN")}"
+                "RU" => GetConnectionString("DB_RU", "redis_ru:6380"),
+                "EU" => GetConnectionString("DB_EU", "redis_eu:6381"),
+                "ASIA" => GetConnectionString("DB_ASIA", "redis_asia:6382"),
+                _ => GetConnectionString("DB_MAIN", "redis_main:6379")
             };
+
 
             connectionString = $"{connectionString},password={Environment.GetEnvironmentVariable("DB_PASSWORD")}";
 

@@ -226,9 +226,6 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
-    volumes:
-      - ./rabbitmq-data:/var/lib/rabbitmq
-      - ./rabbitmq-config/:/etc/rabbitmq/
     environment:
       RABBITMQ_DEFAULT_USER: admin
       RABBITMQ_DEFAULT_PASS: adminPassword
