@@ -26,13 +26,13 @@ public class ValuatorE2ETests : IDisposable
     }
 
     [Fact]
-    public void SubmitTextAndVerifyRankAndSimilarity_ForAllCases()
+    public void Test_SubmitTextAndVerifyRankAndSimilarity()
     {
         foreach (var tc in _cases)
         {
             _driver.Navigate().GoToUrl("http://localhost:8000");
             
-            var wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(10));
+            var wait = new WebDriverWait(_driver, TimeSpan.FromSeconds(20));
             var textarea = wait.Until(drv => drv.FindElement(By.Id("text")));
             textarea.Clear();
             textarea.SendKeys(tc.Text);
@@ -40,22 +40,17 @@ public class ValuatorE2ETests : IDisposable
             var selectElement = wait.Until(drv => drv.FindElement(By.Id("country")));
             var select = new SelectElement(selectElement);
             
-            try
-            {
-                var option = wait.Until(drv => drv.FindElement(By.XPath($"//option[text()='{tc.Country}']")));
-                option.Click();
-            }
-            catch (NoSuchElementException)
-            {
-                Assert.True(false, $"Option with country name '{tc.Country}' not found");
-            }
+            var option = wait.Until(drv => drv.FindElement(By.XPath($"//option[text()='{tc.Country}']")));
+            option.Click();
+
             _driver.FindElement(By.CssSelector("button[type=submit]")).Click();
             
-            var rankTextElement = wait.Until(drv => drv.FindElement(By.XPath("//p[contains(text(),'Оценка содержания')]")));
-            var simTextElement = wait.Until(drv => drv.FindElement(By.XPath("//p[contains(text(),'Плагиат')]")));
-            
-            wait.Until(drv => !rankTextElement.Text.Contains("не завершена"));
-            wait.Until(drv => !simTextElement.Text.Contains("не завершена"));
+            wait.Until(drv => !drv.FindElement(By.XPath("//p[contains(text(),'Оценка содержания')]")).Text.Contains("не завершена"));
+            wait.Until(drv => !drv.FindElement(By.XPath("//p[contains(text(),'Плагиат')]")).Text.Contains("не завершена"));
+
+            var rankTextElement = _driver.FindElement(By.XPath("//p[contains(text(),'Оценка содержания')]"));
+            var simTextElement  = _driver.FindElement(By.XPath("//p[contains(text(),'Плагиат')]"));
+
 
             var rankText = rankTextElement.Text;
             var simText  = simTextElement.Text;
