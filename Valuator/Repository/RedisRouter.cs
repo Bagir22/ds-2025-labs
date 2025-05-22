@@ -21,7 +21,6 @@ public class RedisRouter
     
     private string GetConnectionString(string environmentVariable, string defaultValue)
     {
-        // Читаем значение из переменной окружения, если она существует
         var dbHost = Environment.GetEnvironmentVariable(environmentVariable) ?? defaultValue;
         var dbPassword = Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "somePassword"; 
 

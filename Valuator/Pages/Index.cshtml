@@ -1,11 +1,19 @@
 ﻿@page
 @model IndexModel
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.AspNetCore.Http
 @{
     ViewData["Title"] = "Главная";
 }
 
 <div class="container mt-5">
-    <h2 class="text-center mb-4">Оценка текста</h2>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Оценка текста</h2>
+        <form method="post" asp-page="/Logout">
+            <button type="submit" class="btn btn-outline-secondary">Выйти</button>
+        </form>
+    </div>
 
     <form method="post" class="mx-auto" style="max-width: 600px;">
         <div class="form-group mb-3">

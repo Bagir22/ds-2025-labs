@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Extensions.Logging;
@@ -11,6 +13,8 @@ using Valuator.Publisher;
 using Valuator.Repository;
 
 namespace Valuator.Pages;
+
+[Authorize]
 public class SummaryModel : PageModel
 {
     private readonly ILogger<SummaryModel> _logger;
@@ -29,6 +33,24 @@ public class SummaryModel : PageModel
     {
         _logger.LogDebug(id);
 
+        string? countryCode = _redis.Get("main", $"TEXT-{id}");
+        if (string.IsNullOrEmpty(countryCode))
+        {
+            Response.StatusCode = 404;
+            Response.WriteAsync("Not Found");
+            return;
+        }
+        
+        var authorId = _redis.Get(countryCode, $"TEXT-AUTHOR-{id}");
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (authorId != currentUserId)
+        {
+            Response.StatusCode = 403;
+            Response.WriteAsync("Forbidden");
+            return;
+        }
+        
         string rankValue = GetRank(id);
         string similarityValue = GetSimiliarity(id);
 

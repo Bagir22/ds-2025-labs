@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using StackExchange.Redis;
 using Valuator.Repository;
@@ -50,9 +51,21 @@ public class Program
                 options.Configuration.ChannelPrefix = "signalr";
             });
         
+        builder.Services.AddAuthentication("Cookies")
+            .AddCookie("Cookies", options =>
+            {
+                options.LoginPath = "/Login";
+                options.LogoutPath = "/Logout";
+            });
+        builder.Services.AddAuthorization();
+
+        
         var app = builder.Build();
         
         app.UseCors("AllowAll");
+        
+        app.UseAuthentication();
+        app.UseAuthorization();
         
         // Configure the HTTP request pipeline.
         if (!app.Environment.IsDevelopment())

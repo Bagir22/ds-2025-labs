@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RabbitMQ.Client;
@@ -9,6 +11,7 @@ using Valuator.Models;
 
 namespace Valuator.Pages;
 
+[Authorize]
 public class IndexModel : PageModel
 {
     private readonly ILogger<IndexModel> _logger;
@@ -31,25 +34,22 @@ public class IndexModel : PageModel
     public IActionResult OnPost(string text)
     {
         Countries = Country.AllCountries;
-        
+
         string countryCode = Request.Form["country"];
-        
         string id = Guid.NewGuid().ToString();
 
         if (!string.IsNullOrEmpty(text))
         {
             var textHash = GetTextHash(text);
-            string similarity = GetSimilarity(ref countryCode, textHash, ref id); 
-            
-            _publisher.Publish(
-                exchange: "valuator.events",
-                routingKey: "similarity",
-                message: $"[SIMILARITY]-{id}:{similarity}");
-            
+            string similarity = GetSimilarity(ref countryCode, textHash, ref id);
+
+            _publisher.Publish("valuator.events", "similarity", $"[SIMILARITY]-{id}:{similarity}");
+
             if (similarity == "0")
             {
-                _redis.Set("main", $"TEXT-{id}", countryCode); 
-                
+                _redis.Set("main", $"TEXT-{id}", countryCode);
+                _redis.Set(countryCode, $"TEXT-AUTHOR-{id}", User.FindFirstValue(ClaimTypes.NameIdentifier)); 
+
                 _redis.Set(countryCode, $"TEXT_HASH-{textHash}", id);
                 _redis.Set(countryCode, $"TEXT-{id}", text);
                 _redis.Set(countryCode, $"SIMILARITY-{textHash}", "0");
@@ -58,19 +58,11 @@ public class IndexModel : PageModel
             {
                 _redis.Set(countryCode, $"SIMILARITY-{textHash}", "1");
             }
-            
-            _publisher.Publish(
-               exchange: "valuator.events",
-               routingKey: "similarity",
-               message: $"[SIMILARITY]-{id}:{similarity}");
-            
-            _publisher.Publish(
-                exchange: "valuator.processing.rank",
-                routingKey: "",
-                message: $"{id}");
+
+            _publisher.Publish("valuator.events", "similarity", $"[SIMILARITY]-{id}:{similarity}");
+            _publisher.Publish("valuator.processing.rank", "", id);
         }
-        
-        Console.WriteLine(id);
+
         return Redirect($"summary?id={id}");
     }
     
